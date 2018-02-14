@@ -1,0 +1,156 @@
+Option Explicit 'variables b/t subs
+
+Public exportFolder As String
+Public importXLSX As String
+Public old_name As String
+Public new_name As String
+Public new_date As String
+
+Private Sub CommandButton5_Click() 'save file to button
+    Application.ActiveWorkbook.Save
+    
+    exportFolder = BrowseForFolder()
+    direc.Text = exportFolder 'direc is the sub name of the text box in the userform
+'    Debug.Print (exportFolder)
+End Sub
+
+Private Sub CommandButton6_Click() 'nav 2 file button
+    importXLSX = nav2file()
+    importFileTextBox.Text = importXLSX 'importFileTextBox is the sub name of the text box in the userform
+'    Debug.Print (importXLSX)
+End Sub
+
+Private Sub dateBox_Change()
+    new_date = dateBox.Text
+End Sub
+
+Private Sub direc_Change() 'output folder txtbox
+End Sub
+
+Private Sub importFileTextBox_Change() 'import file txtbox
+End Sub
+
+Private Sub newname_Change() 'name textbox
+    new_name = newname.Text
+End Sub
+
+Private Sub CommandButton7_Click() 'use input file's name button
+End Sub
+
+Private Sub usetodaydate_Click() 'add today's date button
+    new_date = Format(Now(), "yyyymmdd")
+    dateBox.Text = new_date
+End Sub
+
+
+Private Sub CommandButton2_Click() 'run button
+
+    Application.DisplayAlerts = False
+    
+    'clear old range, old workbook
+    Dim clearrange As Range: Set clearrange = ThisWorkbook.Worksheets("Output_HTML").Range("A2:G1000")
+    clearrange.ClearContents
+    
+    'delete out old worksheets not named Dashboard or Output_HTML
+    Dim ws As Worksheet
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = "Dashboard" Or ws.Name = "Output_HTML" Then
+        Else
+            ThisWorkbook.Worksheets(ws.Name).Delete
+        End If
+    Next ws
+    
+    'import in the black book workbook you want
+    Dim importbb As Workbook: Set importbb = Workbooks.Open(importXLSX, UpdateLinks:=False, ReadOnly:=False, Notify:=False)
+    
+    
+    'import the BB workbook into this workbook
+    importbb.Worksheets("owssvr").Copy After:=ThisWorkbook.Worksheets("Output_HTML") 'watch this bit... something messes up
+    importbb.Save
+    importbb.Close
+    
+    'strings to hold html tags and other junk
+    Dim html1 As String: html1 = "<div style=""font-size: 1.3em"">"
+    Dim html1end As String: html1end = "<div style=""color:#FF0000"">"
+    Dim html2 As String: html2 = "<br><a target=""_blank"""
+    Dim html3 As String: html3 = "<div style = ""color: rgb(128, 158, 182);"">"
+    Dim html4 As String: html4 = "<p style=""font-size:1.4em;"">"
+    Dim html4end  As String: html4end = "" style = ""color: rgb(128, 158, 182);"">"
+    Dim PIRstr As String: PIRstr = "https://---etc---.aspx"
+    Dim OutStem As Worksheet: Set OutStem = ThisWorkbook.Worksheets("Output_HTML")
+    Dim inrange As Range: Set inrange = ThisWorkbook.Worksheets("owssvr").Range("D2:D" & LastRowfunc("owssvr", "D1")) 'change to sheet1 later
+    Dim incell As Range
+    
+    'loop to fill & format Output_HTML, preparing to export to csv
+    Dim counter As Integer: counter = 1
+    Dim PIRmatch As New Collection
+    Dim tempArray() 'As Variant
+    Dim allPIRstr As String
+    
+    
+    For Each incell In inrange
+        counter = counter + 1
+        
+        'mult PIRs into one string, name field
+        Set PIRmatch = RegexCollectionFunc("PIR \d", incell.Offset(0, 11).Value)
+        
+        On Error GoTo skipPIR
+        tempArray = collection2array(PIRmatch)
+        allPIRstr = Join(tempArray, ", ")
+        
+        Set PIRmatch = Nothing
+        Erase tempArray
+
+skipPIR:
+        'name field
+        OutStem.Range("A" & counter) = _
+        html1 & incell.Offset(0, 8).Value & "<br>" & _
+        html1end & incell.Value & "</div>" & _
+        incell.Offset(0, 1).Value & "<br>" & "<a href=" & PIRstr & ">" & allPIRstr & "</a>"  'make PIRs hyperlink
+        allPIRstr = ""
+                                                                  
+        'char limit on descrip field
+        Dim Content As String: Content = incell.Offset(0, 3).Value
+        Content = htmlUL(Content) 'html <ul> function
+        
+        'descrip field
+        OutStem.Range("B" & counter) = _
+        html4 & incell.Offset(0, 5).Value & "<br>" & _
+        Content & "<a href=""" & incell.Offset(0, 9).Value & """" & ">" & _
+        "Source: " & incell.Offset(0, 13).Value & "</a>" & "</p>"
+
+
+        'other fields
+        OutStem.Range("C" & counter) = incell.Offset(0, 21) 'icon
+        OutStem.Range("D" & counter) = incell.Offset(0, 22) 'lat
+        OutStem.Range("E" & counter) = incell.Offset(0, 23) 'lon
+        OutStem.Range("F" & counter) = incell.Offset(0, 25) 'pic_url
+        OutStem.Range("G" & counter) = incell.Offset(0, 26) 'thumb_url
+    Next incell
+    
+
+    
+    'call saveascsv function & file name
+    Dim csvPath As String
+    If new_name = "" And new_date = "" Then
+        csvPath = exportFolder & "\BB2portal.csv"
+    ElseIf new_name <> "" And new_date <> "" Then
+        csvPath = exportFolder & "\" & new_name & "__" & new_date & ".csv"
+    ElseIf new_name = "" And new_date <> "" Then
+        csvPath = exportFolder & "\BB2portal" & "__" & new_date & ".csv"
+    ElseIf new_name <> "" And new_date = "" Then
+        csvPath = exportFolder & "\" & new_name & ".csv"
+    End If
+    
+    
+    'use global variable 'exportFolder' filled by user's selection to make the output path for the csv
+    Dim blorp As String: blorp = saveAsCSV("Output_HTML", csvPath)
+    
+    Application.DisplayAlerts = True
+    BB2Portal.Hide
+    Sheets("Dashboard").Activate
+   
+End Sub
+
+
+
